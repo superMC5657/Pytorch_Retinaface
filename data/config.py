@@ -14,7 +14,7 @@ cfg_mnet = {
     'decay1': 190,
     'decay2': 220,
     'image_size': 640,
-    'pretrain': True,
+    'pretrain': False,
     'return_layers': {'stage1': 1, 'stage2': 2, 'stage3': 3},
     'in_channel': 32,
     'out_channel': 64
@@ -39,4 +39,3 @@ cfg_re50 = {
     'in_channel': 256,
     'out_channel': 256
 }
-
