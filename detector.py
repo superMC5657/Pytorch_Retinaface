@@ -7,10 +7,10 @@ import os
 
 from torchvision.ops import nms
 
-from data import cfg_mnet, cfg_re50
-from layers.functions.prior_box import PriorBox
-from models.retinaface import RetinaFace
-from utils.box_utils import decode, decode_landm
+from .data import cfg_mnet, cfg_re50
+from .layers.functions.prior_box import PriorBox
+from .models.retinaface import RetinaFace
+from .utils.box_utils import decode, decode_landm
 
 
 def check_keys(model, pretrained_state_dict):
@@ -50,9 +50,9 @@ def load_model(model, pretrained_path, load_to_gpu):
 
 
 class Detector:
-    def __init__(self, weight="./retinaFace_checkpoints/mobilenet0.25_Final.pth", use_cuda=1, image_size=None):
+    def __init__(self, weight="fid/retinaFace/retinaFace_checkpoints/mobilenet0.25_Final.pth", use_cuda=1, image_size=None):
         network = os.path.split(weight)[-1].split("_")[0]
-        device = torch.device("cpu" if use_cuda else "cuda")
+        device = torch.device("cuda" if use_cuda else "cpu")
         self.device = device
         self.cfg = None
         if network == "mobilenet0.25":
@@ -92,7 +92,7 @@ class Detector:
         scores = scores[inds]
 
         # keep top-K before NMS
-        order = scores.argsort()[::-1][:self.top_k]
+        order = scores.argsort(descending=True)[:self.top_k]
         boxes = boxes[order]
         landms = landms[order]
         scores = scores[order]
@@ -113,14 +113,14 @@ class Detector:
     def __call__(self, image):
         img = image - (104, 117, 123)
         img = img.transpose(2, 0, 1)
-        img = torch.from_numpy(img).unsqueeze(0)
+        img = torch.from_numpy(img).unsqueeze(0).type(dtype=torch.float)
         img = img.to(self.device)
 
         loc, conf, landms = self.net(img)
         boxes = decode(loc.data.squeeze(0), self.prior_data, self.cfg['variance'])
         boxes = boxes * self.scale_box / self.resize
         boxes = boxes.cpu()
-        scores = conf.squeeze(0).data.cpu().numpy()[:, 1]
+        scores = conf.squeeze(0).data.cpu()[:, 1]
         landms = decode_landm(landms.data.squeeze(0), self.prior_data, self.cfg['variance'])
         landms = landms * self.scale_landms / self.resize
         landms = landms.cpu()
@@ -129,12 +129,12 @@ class Detector:
 
         faces = list()
         for box, landm in zip(boxes, landms):
-            face = crop_image(image, boxes)
+            face = crop_box(image, box)
             eye_left_x, eye_left_y = change_coord(landm[0], landm[1], box[0], box[1])
             eye_right_x, eye_right_y = change_coord(landm[2], landm[3], box[0], box[1])
             face = warp_affine(image=face, x1=eye_left_x, y1=eye_left_y, x2=eye_right_x, y2=eye_right_y)
             faces.append(face)
-        return faces
+        return faces, boxes
 
 
 if __name__ == '__main__':
